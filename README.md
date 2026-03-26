@@ -43,6 +43,21 @@ The `.env.example` file includes all currently required keys for this slice:
 Supabase project URL is prefilled for:
 `https://supabase.com/dashboard/project/rwtodytvjwbgadqwkvno`
 
+### Typesense Cloud setup
+
+For this project, use Typesense Cloud (not self-hosted).
+
+- `TYPESENSE_HOST`: cloud node hostname only (no protocol, no port)
+- `TYPESENSE_PORT`: `443`
+- `TYPESENSE_PROTOCOL`: `https`
+- `TYPESENSE_API_KEY`: admin key for server-side sync/indexing
+
+After setting env vars, sync regions:
+
+```bash
+npm run sync:typesense:regions
+```
+
 ## CI/CD
 
 GitHub Actions workflow is defined in `.github/workflows/ci.yml`.
