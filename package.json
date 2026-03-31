@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "sync:typesense:regions": "node scripts/sync-regions-to-typesense.mjs"
+    "sync:typesense:regions": "node scripts/sync-regions-to-typesense.mjs",
+    "ingest:batch": "node --import tsx scripts/ingest-batch.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
@@ -16,7 +17,8 @@
     "next": "^15.5.14",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "typesense": "^3.0.3"
+    "typesense": "^3.0.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -26,6 +28,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.5.14",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,11 +19,13 @@ export const metadata: Metadata = {
   description: "Travel allergen information by city and location.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isAdmin = await isAdminAuthenticated();
+
   return (
     <html
       lang="en"
@@ -29,8 +33,31 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <header className="border-b border-black/10 bg-white">
-          <nav className="mx-auto w-full max-w-5xl px-6 py-4">
-            <h1 className="text-xl font-semibold text-black">Travellergy</h1>
+          <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
+            <Link href="/" className="text-xl font-semibold text-black">
+              Travellergy
+            </Link>
+            <Link
+              href="/compare"
+              className="text-sm font-medium text-black underline-offset-4 hover:underline"
+            >
+              Compare
+            </Link>
+            {isAdmin ? (
+              <Link
+                href="/admin/ingestion-review"
+                className="text-sm font-medium text-black underline-offset-4 hover:underline"
+              >
+                Review
+              </Link>
+            ) : (
+              <Link
+                href="/admin/login?next=/admin/ingestion-review"
+                className="text-sm font-medium text-black underline-offset-4 hover:underline"
+              >
+                Admin Login
+              </Link>
+            )}
           </nav>
         </header>
         <main className="mx-auto flex w-full max-w-5xl flex-1 px-6 py-10">

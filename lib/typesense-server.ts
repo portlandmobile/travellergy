@@ -1,18 +1,32 @@
 import Typesense from "typesense";
 
 function required(name: string): string {
-  const value = process.env[name];
+  const value = normalizeEnvValue(process.env[name]);
   if (!value) {
     throw new Error(`Missing required env var: ${name}`);
   }
   return value;
 }
 
+function normalizeEnvValue(value: string | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 export function getTypesenseClient() {
   const host = required("TYPESENSE_HOST");
   const port = Number(process.env.TYPESENSE_PORT ?? "443");
-  const protocol = process.env.TYPESENSE_PROTOCOL ?? "https";
-  const apiKey = required("TYPESENSE_API_KEY");
+  const protocol = normalizeEnvValue(process.env.TYPESENSE_PROTOCOL) || "https";
+  const apiKey =
+    normalizeEnvValue(process.env.TYPESENSE_ADMIN_API_KEY) ||
+    required("TYPESENSE_API_KEY");
 
   return new Typesense.Client({
     nodes: [{ host, port, protocol }],
