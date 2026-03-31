@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "sync:typesense:regions": "node scripts/sync-regions-to-typesense.mjs",
-    "ingest:batch": "node --import tsx scripts/ingest-batch.ts"
+    "ingest:batch": "node --import tsx scripts/ingest-batch.ts",
+    "promote:validated": "node --import tsx scripts/promote-validated.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
     "@vercel/analytics": "^2.0.1",
     "dotenv": "^17.3.1",
+    "framer-motion": "^12.38.0",
     "next": "^15.5.14",
     "react": "19.2.4",
     "react-dom": "19.2.4",

@@ -96,6 +96,16 @@ Protected by `Authorization: Bearer <INGESTION_API_SECRET>`.
   - Persists to `staging.ingestion_raw` + `staging.ingestion_audit`
   - Continues on per-dish errors and prints a summary at the end
 
+## Hydrate Validated Staging -> Public
+
+- Command: `npm run promote:validated -- [--dry-run] [--limit=<n>] [--region=<region-slug>]`
+- Reads `staging.ingestion_raw` rows where `status='validated'`, then hydrates:
+  - `public.dishes` (upsert by `dish_id` when available, else by `slug`)
+  - `public.ingredients` (upsert by normalized ingredient name)
+  - `public.dish_ingredients` (upsert links + hidden flag)
+  - `public.region_dish_mapping` (insert mapping when `region_slug` is present)
+- Use `--dry-run` first to preview what would be promoted.
+
 ## Vercel Deployment
 
 This repository is expected to be connected to an existing Vercel project.
