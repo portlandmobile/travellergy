@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="Regional safety intelligence">
+  <defs>
+    <linearGradient id="bg-def" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f9f7f2"/>
+      <stop offset="100%" stop-color="#ebe4d8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg-def)"/>
+  <!-- Generic skyline -->
+  <g fill="none" stroke="#4a6d5c" stroke-opacity="0.2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 760 520 L 760 380 L 780 360 L 800 380 L 800 520"/>
+    <path d="M 820 520 L 820 320 L 840 300 L 860 320 L 860 520"/>
+    <path d="M 900 520 L 900 400 L 920 370 L 940 400 L 940 520"/>
+    <path d="M 1000 520 L 1000 350 L 1020 310 L 1040 350 L 1040 520"/>
+    <path d="M 1080 520 L 1080 420 L 1100 390 L 1120 420 L 1120 520"/>
+  </g>
+  <g stroke="#4a6d5c" stroke-opacity="0.1" stroke-width="1">
+    <line x1="0" y1="540" x2="1200" y2="540"/>
+  </g>
+  <g transform="translate(96 96)">
+    <circle r="24" fill="#4a6d5c" fill-opacity="0.06" stroke="#4a6d5c" stroke-opacity="0.22" stroke-width="1.25"/>
+    <text x="0" y="7" text-anchor="middle" font-family="Georgia,serif" font-size="20" font-weight="600" fill="#4a6d5c" fill-opacity="0.55">i</text>
+  </g>
+  <g transform="translate(160 248)" fill="#4a6d5c" fill-opacity="0.14">
+    <rect x="0" y="48" width="20" height="64" rx="4"/>
+    <rect x="36" y="28" width="20" height="84" rx="4"/>
+    <rect x="72" y="8" width="20" height="104" rx="4"/>
+  </g>
+  <text x="600" y="420" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="56" font-weight="600" fill="#1a1a1a">Regional hub</text>
+  <text x="600" y="478" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" letter-spacing="0.22em" fill="#4a6d5c" fill-opacity="0.85">SAFETY INTELLIGENCE</text>
+</svg>

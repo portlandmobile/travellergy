@@ -42,14 +42,31 @@ function rowSummary(raw: unknown) {
     ? transform?.low_confidence_reasons.filter((v): v is string => typeof v === "string")
     : [];
 
+  const canonicalSlug =
+    typeof payload?.dish_slug === "string" ? payload.dish_slug : "";
+
   return {
     query: typeof payload?.requested_query === "string" ? payload.requested_query : "",
     nameEn: typeof mapped?.name_en === "string" ? mapped.name_en : "",
     slug: typeof mapped?.slug === "string" ? mapped.slug : "",
+    canonicalSlug,
     ingredientCount: Array.isArray(mapped?.ingredients) ? mapped.ingredients.length : 0,
     confidence: typeof transform?.confidence === "string" ? transform.confidence : "",
     reasons,
   };
+}
+
+function reviewListHref(opts: {
+  status: QueueStatus;
+  limit?: string;
+  dish?: string;
+}): string {
+  const u = new URLSearchParams();
+  u.set("status", opts.status);
+  if (opts.limit) u.set("limit", opts.limit);
+  if (opts.dish) u.set("dish", opts.dish);
+  const q = u.toString();
+  return q ? `/admin/ingestion-review?${q}` : "/admin/ingestion-review";
 }
 
 async function decide(formData: FormData) {
@@ -63,12 +80,21 @@ async function decide(formData: FormData) {
   const decision = String(formData.get("decision") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
   const status = parseStatus(String(formData.get("status") ?? ""));
+  const limit = String(formData.get("limit") ?? "").trim();
+  const dish = String(formData.get("dish") ?? "").trim();
+
+  const back = () =>
+    reviewListHref({
+      status,
+      ...(limit ? { limit } : {}),
+      ...(dish ? { dish } : {}),
+    });
 
   if (!Number.isInteger(rowId) || rowId < 1) {
-    redirect(`/admin/ingestion-review?status=${status}&error=invalid_row_id`);
+    redirect(`${back()}&error=invalid_row_id`);
   }
   if (!["accepted", "rejected", "flagged"].includes(decision)) {
-    redirect(`/admin/ingestion-review?status=${status}&error=invalid_decision`);
+    redirect(`${back()}&error=invalid_decision`);
   }
 
   const newStatus =
@@ -89,7 +115,7 @@ async function decide(formData: FormData) {
     .eq("id", rowId);
 
   if (updateError) {
-    redirect(`/admin/ingestion-review?status=${status}&error=update_failed`);
+    redirect(`${back()}&error=update_failed`);
   }
 
   const { error: auditError } = await supabase
@@ -102,16 +128,22 @@ async function decide(formData: FormData) {
     });
 
   if (auditError) {
-    redirect(`/admin/ingestion-review?status=${status}&error=audit_failed`);
+    redirect(`${back()}&error=audit_failed`);
   }
 
-  redirect(`/admin/ingestion-review?status=${status}&ok=1`);
+  redirect(`${back()}&ok=1`);
 }
 
 export default async function IngestionReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; limit?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    limit?: string;
+    dish?: string;
+    ok?: string;
+    error?: string;
+  }>;
 }) {
   if (!(await isAdminAuthenticated())) {
     redirect("/admin/login?next=/admin/ingestion-review");
@@ -119,11 +151,12 @@ export default async function IngestionReviewPage({
 
   const params = await searchParams;
   const status = parseStatus(params.status);
-  const limitRaw = Number(params.limit ?? "30");
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(Math.floor(limitRaw), 100)) : 30;
+  const limitRaw = Number(params.limit ?? "100");
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(Math.floor(limitRaw), 200)) : 100;
+  const dishFilter = (params.dish ?? "").trim().toLowerCase();
 
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .schema("staging")
     .from("ingestion_raw")
     .select("id, source_name, status, created_at, processed_at, raw_data")
@@ -131,20 +164,46 @@ export default async function IngestionReviewPage({
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  if (dishFilter) {
+    query = query.contains("raw_data", { dish_slug: dishFilter });
+  }
+
+  const { data, error } = await query;
+
   const rows = (data ?? []) as IngestionRow[];
+  const limitStr = String(limit);
+  const dishStr = dishFilter;
 
   return (
     <section className="w-full space-y-4">
       <h1 className="text-xl font-semibold text-black">Ingestion Review</h1>
       <p className="text-sm text-black/70">
-        Internal queue for reviewing staged ingestion rows.
+        Internal queue for staged ingestion rows. Newest first, capped by{" "}
+        <span className="font-medium text-black">limit</span> (default 100). If a row exists in SQL
+        but not here, raise <span className="font-medium text-black">limit</span> or filter by{" "}
+        <span className="font-medium text-black">dish</span> (canonical{" "}
+        <code className="text-xs">dish_slug</code>).
+      </p>
+
+      <p className="text-xs text-black/60">
+        Example:{" "}
+        <a
+          className="underline"
+          href="/admin/ingestion-review?status=needs_review&dish=rouladen&limit=50"
+        >
+          ?status=needs_review&amp;dish=rouladen
+        </a>
       </p>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {STATUS_VALUES.map((s) => (
           <a
             key={s}
-            href={`/admin/ingestion-review?status=${s}`}
+            href={reviewListHref({
+              status: s,
+              limit: limitStr,
+              ...(dishStr ? { dish: dishStr } : {}),
+            })}
             className={`rounded border px-2 py-1 ${
               s === status ? "border-black bg-black text-white" : "border-black/20 text-black"
             }`}
@@ -171,9 +230,23 @@ export default async function IngestionReviewPage({
         </p>
       ) : null}
 
+      {!error ? (
+        <p className="text-xs text-black/55">
+          Showing {rows.length} row{rows.length === 1 ? "" : "s"}
+          {dishStr ? ` (dish_slug=${dishStr})` : ""} · limit={limit}
+        </p>
+      ) : null}
+
       {!error && rows.length === 0 ? (
         <p className="rounded border border-black/10 bg-white px-3 py-2 text-sm text-black/70">
-          No rows found for status <span className="font-medium text-black">{status}</span>.
+          No rows found for status <span className="font-medium text-black">{status}</span>
+          {dishStr ? (
+            <>
+              {" "}
+              with <span className="font-medium text-black">dish_slug={dishStr}</span>
+            </>
+          ) : null}
+          .
         </p>
       ) : null}
 
@@ -181,7 +254,7 @@ export default async function IngestionReviewPage({
         {rows.map((row) => {
           const summary = rowSummary(row.raw_data);
           return (
-            <article key={row.id} className="rounded border border-black/10 bg-white p-4 space-y-3">
+            <article key={row.id} className="space-y-3 rounded border border-black/10 bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium text-black">
@@ -196,7 +269,10 @@ export default async function IngestionReviewPage({
 
               <div className="grid gap-1 text-sm text-black/80">
                 <p>query: {summary.query || "-"}</p>
-                <p>slug: {summary.slug || "-"}</p>
+                <p>
+                  canonical dish_slug: {summary.canonicalSlug || "-"}{" "}
+                  <span className="text-black/50">· mapped slug: {summary.slug || "-"}</span>
+                </p>
                 <p>ingredients: {summary.ingredientCount}</p>
                 <p>confidence: {summary.confidence || "-"}</p>
                 <p>reasons: {summary.reasons.length > 0 ? summary.reasons.join(", ") : "-"}</p>
@@ -205,6 +281,8 @@ export default async function IngestionReviewPage({
               <form action={decide} className="space-y-2">
                 <input type="hidden" name="row_id" value={row.id} />
                 <input type="hidden" name="status" value={status} />
+                <input type="hidden" name="limit" value={limitStr} />
+                {dishStr ? <input type="hidden" name="dish" value={dishStr} /> : null}
                 <input
                   name="reason"
                   placeholder="Optional reason"

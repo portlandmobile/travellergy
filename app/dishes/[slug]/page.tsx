@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { DishIngredientsHighlight } from "@/app/components/dish-ingredients-highlight";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
+import { SafetyPanel } from "@/app/components/safety-panel";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { getDishDetails } from "@/lib/dish-details";
 
@@ -9,13 +11,6 @@ function normalizeRisk(value: string): RiskLevel {
   const risk = value.toUpperCase();
   if (risk === "HIGH" || risk === "MEDIUM" || risk === "LOW") return risk;
   return "UNKNOWN";
-}
-
-function riskBadgeClass(level: RiskLevel): string {
-  if (level === "HIGH") return "bg-red-100 text-red-800";
-  if (level === "MEDIUM") return "bg-amber-100 text-amber-800";
-  if (level === "LOW") return "bg-teal-100 text-teal-800";
-  return "bg-gray-100 text-gray-700";
 }
 
 function overallRiskLevel(risks: string[]): RiskLevel {
@@ -74,59 +69,30 @@ export default async function DishPage({
   const overallRisk = overallRiskLevel(risks);
 
   return (
-    <section className="w-full max-w-3xl space-y-6">
+    <section className="w-full max-w-3xl space-y-8">
       <Link href={backHref} className="text-sm underline">
         &larr; {backLabel}
       </Link>
 
       <StalenessWarning />
 
-      <header className="space-y-3 rounded-lg border border-black/10 p-5">
+      <header className="space-y-4 rounded-xl border border-sage/20 bg-white/60 p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-2xl font-semibold">{data.dish.name_en}</h2>
+          <h2 className="font-serif text-3xl text-charcoal">{data.dish.name_en}</h2>
           <FreshnessBadge />
         </div>
-        <span
-          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${riskBadgeClass(overallRisk)}`}
-        >
-          Risk: {overallRisk}
-        </span>
-        {data.dish.description && (
-          <p className="text-sm text-black/80">{data.dish.description}</p>
-        )}
+        {data.dish.description ? (
+          <p className="text-sm leading-relaxed text-charcoal/80">
+            {data.dish.description}
+          </p>
+        ) : null}
       </header>
 
-      <section className="space-y-3 rounded-lg border border-black/10 p-5">
-        <h3 className="text-lg font-semibold">Ingredients</h3>
-        {data.dish.ingredients.length === 0 ? (
-          <p className="text-sm text-black/70">No ingredient data available.</p>
-        ) : (
-          <ul className="space-y-2">
-            {data.dish.ingredients.map((item) => {
-              const ingredientRisk = normalizeRisk(item.allergen_risk);
-              return (
-                <li
-                  key={`${item.name}-${item.is_hidden ? "hidden" : "visible"}`}
-                  className="space-y-2 rounded-md border border-black/10 px-3 py-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium">{item.name}</span>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${riskBadgeClass(ingredientRisk)}`}
-                    >
-                      {ingredientRisk}
-                    </span>
-                  </div>
-                  {item.is_hidden && (
-                    <p className="text-sm font-medium text-red-700">
-                      Hidden ingredient warning
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <SafetyPanel overallRisk={overallRisk} />
+
+      <section className="space-y-4">
+        <h3 className="font-serif text-xl text-charcoal">Ingredients</h3>
+        <DishIngredientsHighlight ingredients={data.dish.ingredients} />
       </section>
     </section>
   );

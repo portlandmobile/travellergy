@@ -1,15 +1,9 @@
 import Link from "next/link";
+import CityHubClient from "@/app/components/city-hub-client";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { getRegionLocations } from "@/lib/region-locations";
-import { getRegionDishes, type RegionDishRiskLevel } from "@/lib/regions-dishes";
-
-type Dish = {
-  slug: string;
-  name_en: string;
-  prevalence: string;
-  risk_level: RegionDishRiskLevel;
-};
+import { getRegionDishes, type RegionDishCard, type RegionDishRiskLevel } from "@/lib/regions-dishes";
 
 function riskBadgeClass(level: RegionDishRiskLevel): string {
   if (level === "HIGH") return "bg-red-100 text-red-800";
@@ -18,7 +12,7 @@ function riskBadgeClass(level: RegionDishRiskLevel): string {
   return "bg-gray-100 text-gray-700";
 }
 
-function overallRiskLevel(dishes: Dish[]): RegionDishRiskLevel {
+function overallRiskLevel(dishes: RegionDishCard[]): RegionDishRiskLevel {
   if (dishes.some((dish) => dish.risk_level === "HIGH")) return "HIGH";
   if (dishes.some((dish) => dish.risk_level === "MEDIUM")) return "MEDIUM";
   if (dishes.some((dish) => dish.risk_level === "LOW")) return "LOW";
@@ -66,7 +60,7 @@ export default async function CityPage({
   }
 
   return (
-    <section className="w-full max-w-3xl space-y-6">
+    <section className="w-full max-w-6xl space-y-8">
       <Link href="/" className="text-sm underline">
         &larr; Back
       </Link>
@@ -81,38 +75,14 @@ export default async function CityPage({
         <span
           className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${riskBadgeClass(overallRisk)}`}
         >
-          Risk: {overallRisk}
+          Risk: {overallRisk === "UNKNOWN" ? "TBD" : overallRisk}
         </span>
         <p className="text-sm text-black/70">
           Regional intelligence based on current culinary patterns.
         </p>
       </header>
 
-      <section className="space-y-3 rounded-lg border border-black/10 p-5">
-        <h3 className="text-lg font-semibold">Top Culinary Patterns</h3>
-        {data.dishes.length === 0 ? (
-          <p className="text-sm text-black/70">No data available for this city yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {data.dishes.map((dish) => (
-              <li
-                key={dish.slug}
-                className="flex items-center justify-between rounded-md border border-black/10 px-3 py-2"
-              >
-                <Link
-                  href={`/dishes/${dish.slug}?from=${encodeURIComponent(slug)}`}
-                  className="font-medium underline"
-                >
-                  {dish.name_en}
-                </Link>
-                <span className="text-sm text-black/70">
-                  {dish.prevalence.charAt(0) + dish.prevalence.slice(1).toLowerCase()}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <CityHubClient citySlug={slug} dishes={data.dishes} />
 
       <section className="space-y-3 rounded-lg border border-black/10 p-5">
         <h3 className="text-lg font-semibold">View Venues</h3>

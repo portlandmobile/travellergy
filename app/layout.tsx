@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Inter, Playfair_Display } from "next/font/google";
+import { AllergenFilterProvider } from "@/app/contexts/allergen-filter-context";
 import { clearAdminSessionCookie, isAdminAuthenticated } from "@/lib/admin-auth";
 import "./globals.css";
 
@@ -37,6 +38,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-warm text-charcoal">
+        <AllergenFilterProvider>
         <div className="flex min-h-full flex-col">
           <header className="border-b border-sage/15 bg-warm/95 backdrop-blur">
             <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-5">
@@ -89,6 +91,7 @@ export default async function RootLayout({
             </div>
           </footer>
         </div>
+        </AllergenFilterProvider>
       </body>
     </html>
   );

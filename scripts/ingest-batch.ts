@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import { EdamamAdapter } from "../lib/pipeline/adapters/edamam";
 import { transformAndValidate } from "../lib/pipeline/transformer";
@@ -88,45 +88,29 @@ type RegionDishRow = {
   dishes: { id: string; name_en: string; slug: string } | null;
 };
 
-async function main() {
-  const regionSlug = (parseArg("--region") ?? "").trim().toLowerCase();
-  if (!regionSlug) {
-    console.error(
-      "Usage: npm run ingest:batch -- --region=<region-slug> [--dry-run] [--limit=<n>] [--sleep-ms=<n>] [--sleep-jitter-ms=<n>]",
-    );
-    process.exit(1);
-  }
+type RegionRow = { id: string; slug: string; name: string };
 
-  const dryRun = hasFlag("--dry-run");
-  const maxAttempts = parseLimit();
-  const pacing = parsePacingMs();
+type AttemptCounter = { value: number };
 
-  if (dryRun) {
-    console.log("[ingest-batch] DRY RUN: no Edamam calls, no DB writes");
-  }
-  if (maxAttempts != null) {
-    console.log(`[ingest-batch] limit=${maxAttempts} ingest attempts (after skips)`);
-  }
-  if (pacing.minMs > 0 || pacing.jitterMs > 0) {
-    console.log(
-      `[ingest-batch] extra pacing: min=${pacing.minMs}ms jitter=0..${pacing.jitterMs}ms (before each Edamam call)`,
-    );
-  }
+type RegionIngestTotals = {
+  processed: number;
+  skipped: number;
+  failed: number;
+  inserted: number;
+  stoppedByLimit: boolean;
+};
 
-  const supabase = createClient(
-    required("NEXT_PUBLIC_SUPABASE_URL"),
-    required("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } },
-  );
-
-  const { data: region, error: regionError } = await supabase
-    .from("regions")
-    .select("id,slug,name")
-    .eq("slug", regionSlug)
-    .maybeSingle();
-  if (regionError) throw new Error(`Failed loading region: ${regionError.message}`);
-  if (!region) throw new Error(`Region not found for slug '${regionSlug}'`);
-
+async function ingestOneRegion(
+  supabase: SupabaseClient,
+  region: RegionRow,
+  options: {
+    dryRun: boolean;
+    maxAttempts: number | null;
+    attempts: AttemptCounter;
+    pacing: { minMs: number; jitterMs: number };
+    adapter: EdamamAdapter | null;
+  },
+): Promise<RegionIngestTotals> {
   const { data: mappedRows, error: mapError } = await supabase
     .from("region_dish_mapping")
     .select("dish_id,dishes:dish_id(id,name_en,slug)")
@@ -142,13 +126,13 @@ async function main() {
   console.log(
     `[ingest-batch] region=${region.slug} (${region.name}) canonical_dishes=${dishes.length}`,
   );
-  const adapter = dryRun ? null : new EdamamAdapter();
 
   let processed = 0;
   let skipped = 0;
   let failed = 0;
   let inserted = 0;
-  let attemptsUsed = 0;
+  let stoppedByLimit = false;
+  const { dryRun, maxAttempts, attempts, pacing, adapter } = options;
 
   for (const dish of dishes) {
     try {
@@ -163,23 +147,26 @@ async function main() {
       }
       if ((existing ?? []).length > 0) {
         skipped += 1;
-        console.log(`[skip] ${dish.slug} (${dish.name_en}) already has staging row`);
+        console.log(`[skip] ${region.slug}/${dish.slug} (${dish.name_en}) already has staging row`);
         continue;
       }
 
-      if (maxAttempts != null && attemptsUsed >= maxAttempts) {
-        console.log(`[stop] --limit=${maxAttempts} reached (${skipped} skipped earlier)`);
+      if (maxAttempts != null && attempts.value >= maxAttempts) {
+        console.log(
+          `[stop] --limit=${maxAttempts} reached globally (${skipped} skipped earlier in this region)`,
+        );
+        stoppedByLimit = true;
         break;
       }
-      attemptsUsed += 1;
+      attempts.value += 1;
       processed += 1;
 
       if (dryRun) {
-        console.log(`[dry-run] ${dish.slug} would_ingest query="${dish.name_en}"`);
+        console.log(`[dry-run] ${region.slug}/${dish.slug} would_ingest query="${dish.name_en}"`);
         continue;
       }
 
-      console.log(`[run ] ${dish.slug} query="${dish.name_en}"`);
+      console.log(`[run ] ${region.slug}/${dish.slug} query="${dish.name_en}"`);
 
       await paceBeforeEdamam(pacing.minMs, pacing.jitterMs);
       const fetchResult = await adapter!.searchFirstDish(dish.name_en);
@@ -241,18 +228,115 @@ async function main() {
       if (auditError) throw new Error(`insert ingestion_audit failed: ${auditError.message}`);
 
       inserted += 1;
-      console.log(`[ ok ] ${dish.slug} -> ${status}`);
+      console.log(`[ ok ] ${region.slug}/${dish.slug} -> ${status}`);
     } catch (error) {
       failed += 1;
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[fail] ${dish.slug}: ${message}`);
+      console.error(`[fail] ${region.slug}/${dish.slug}: ${message}`);
       continue;
     }
   }
 
   console.log(
-    `[summary] region=${region.slug} dry_run=${dryRun} total_mapped=${dishes.length} attempts=${attemptsUsed}` +
-      ` processed=${processed} inserted=${inserted} skipped=${skipped} failed=${failed}` +
+    `[summary] region=${region.slug} total_mapped=${dishes.length} processed=${processed} inserted=${inserted} skipped=${skipped} failed=${failed}` +
+      (stoppedByLimit ? " (stopped: global limit)" : ""),
+  );
+
+  return { processed, skipped, failed, inserted, stoppedByLimit };
+}
+
+async function main() {
+  const regionArg = (parseArg("--region") ?? "").trim().toLowerCase();
+  if (!regionArg) {
+    console.error(
+      "Usage: npm run ingest:batch -- --region=<slug>|all [--dry-run] [--limit=<n>] [--sleep-ms=<n>] [--sleep-jitter-ms=<n>]",
+    );
+    console.error("  --region=all   every row in public.regions (ordered by slug)");
+    console.error("  --limit        optional; max Edamam attempts after skips (global when using all)");
+    process.exit(1);
+  }
+
+  const allRegions = regionArg === "all";
+  const regionSlug = allRegions ? null : regionArg;
+
+  const dryRun = hasFlag("--dry-run");
+  const maxAttempts = parseLimit();
+  const pacing = parsePacingMs();
+
+  if (dryRun) {
+    console.log("[ingest-batch] DRY RUN: no Edamam calls, no DB writes");
+  }
+  if (maxAttempts != null) {
+    console.log(
+      `[ingest-batch] limit=${maxAttempts} ingest attempts (after skips, global across regions when --region=all)`,
+    );
+  } else {
+    console.log("[ingest-batch] no --limit: all eligible dishes will be attempted (per region)");
+  }
+  if (pacing.minMs > 0 || pacing.jitterMs > 0) {
+    console.log(
+      `[ingest-batch] extra pacing: min=${pacing.minMs}ms jitter=0..${pacing.jitterMs}ms (before each Edamam call)`,
+    );
+  }
+
+  const supabase = createClient(
+    required("NEXT_PUBLIC_SUPABASE_URL"),
+    required("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } },
+  );
+
+  let regions: RegionRow[];
+  if (allRegions) {
+    const { data, error } = await supabase
+      .from("regions")
+      .select("id,slug,name")
+      .order("slug", { ascending: true });
+    if (error) throw new Error(`Failed loading regions: ${error.message}`);
+    regions = (data ?? []) as RegionRow[];
+    if (regions.length === 0) {
+      console.log("[ingest-batch] no regions in database");
+      return;
+    }
+    console.log(`[ingest-batch] --region=all → ${regions.length} region(s)`);
+  } else {
+    const { data: region, error: regionError } = await supabase
+      .from("regions")
+      .select("id,slug,name")
+      .eq("slug", regionSlug)
+      .maybeSingle();
+    if (regionError) throw new Error(`Failed loading region: ${regionError.message}`);
+    if (!region) throw new Error(`Region not found for slug '${regionSlug}'`);
+    regions = [region as RegionRow];
+  }
+
+  const adapter = dryRun ? null : new EdamamAdapter();
+  const attempts: AttemptCounter = { value: 0 };
+
+  let totalProcessed = 0;
+  let totalSkipped = 0;
+  let totalFailed = 0;
+  let totalInserted = 0;
+
+  for (const region of regions) {
+    const stats = await ingestOneRegion(supabase, region, {
+      dryRun,
+      maxAttempts,
+      attempts,
+      pacing,
+      adapter,
+    });
+    totalProcessed += stats.processed;
+    totalSkipped += stats.skipped;
+    totalFailed += stats.failed;
+    totalInserted += stats.inserted;
+    if (stats.stoppedByLimit) {
+      break;
+    }
+  }
+
+  console.log(
+    `[ingest-batch] DONE dry_run=${dryRun} regions_run=${regions.length}` +
+      ` total_attempts=${attempts.value} processed=${totalProcessed} inserted=${totalInserted} skipped=${totalSkipped} failed=${totalFailed}` +
       (maxAttempts != null ? ` limit=${maxAttempts}` : ""),
   );
 }

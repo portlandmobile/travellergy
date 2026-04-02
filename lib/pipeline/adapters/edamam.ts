@@ -6,14 +6,19 @@
 import { IngestionSourceSchema, type IngestionSource } from "../schema";
 import { runWithEdamamRateLimit } from "./edamam-rate-limit";
 
+type EdamamRecipe = {
+  uri?: string;
+  label?: string;
+  source?: string;
+  /** Present on many v2 search hits. */
+  ingredientLines?: string[];
+  /** Alternate shape: array of `{ text: "1 cup …" }` (also used on site). */
+  ingredients?: Array<{ text?: string } | string>;
+  summary?: string;
+};
+
 type EdamamRecipeHit = {
-  recipe?: {
-    uri?: string;
-    label?: string;
-    source?: string;
-    ingredientLines?: string[];
-    summary?: string;
-  };
+  recipe?: EdamamRecipe;
 };
 
 type EdamamSearchResponse = {
@@ -80,9 +85,35 @@ function inferAllergenRiskFromLine(line: string): "HIGH" | "MEDIUM" | "LOW" | "U
   return "UNKNOWN";
 }
 
-function inferDishRisk(ingredientLines: string[]): boolean {
-  const blob = ingredientLines.join(" ");
+function inferDishRisk(lines: string[]): boolean {
+  const blob = lines.join(" ");
   return ALLERGEN_HINT.test(blob);
+}
+
+/**
+ * Edamam search may return `ingredientLines` or only `ingredients[].text`.
+ * Use both so we don’t store empty lists when the site shows ingredients.
+ */
+function extractIngredientLines(recipe: EdamamRecipe): string[] {
+  const fromLines = recipe.ingredientLines;
+  if (Array.isArray(fromLines) && fromLines.length > 0) {
+    return fromLines.map((l) => String(l).trim()).filter(Boolean);
+  }
+  const raw = recipe.ingredients;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const t = item.trim();
+      if (t) out.push(t);
+      continue;
+    }
+    if (item && typeof item === "object" && "text" in item) {
+      const t = String((item as { text?: string }).text ?? "").trim();
+      if (t) out.push(t);
+    }
+  }
+  return out;
 }
 
 export type EdamamFetchResult = {
@@ -183,7 +214,7 @@ export class EdamamAdapter {
         return { mapped, raw, source };
       }
 
-      const lines = recipe.ingredientLines ?? [];
+      const lines = extractIngredientLines(recipe);
       const ingredients = lines.map((line) => ({
         name: line.trim(),
         is_hidden: false,

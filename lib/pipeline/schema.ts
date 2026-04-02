@@ -22,6 +22,8 @@ export const DishSchema = z.object({
     ),
   description: z.string().optional().default(""),
   is_common_allergen_risk: z.boolean().optional().default(false),
+  risk_level: z.enum(["safe", "caution", "high-risk"]).default("safe"),
+  safety_tips: z.array(z.string()).default([]),
   ingredients: z.array(DishIngredientSchema).default([]),
 });
 
