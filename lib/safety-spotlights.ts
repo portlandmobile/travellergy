@@ -31,34 +31,43 @@ const REGION_LABELS: Record<string, string> = {
   nyc: "New York City",
 };
 
-/** Stable per UTC day so the pair rotates without changing on every request. */
-function dayBucketUtc(): number {
-  return Math.floor(Date.now() / 86_400_000);
-}
+const POOL_CAP = 32;
+
+export type HomeSafetySpotlightsResult = {
+  spotlights: HomeSafetySpotlight[];
+  /** True when every pool item was already in the session cookie; cookie was replaced on next record. */
+  sessionReset: boolean;
+};
 
 /**
- * Pick up to `count` spotlights: priority-first, then rotate through the top pool
- * and prefer two different regions when possible (FR-09 / intelligent rotation).
+ * Prefer spotlights not yet shown this session (cookie). When all are seen, reset and
+ * draw from the full pool. Each visit varies the starting index; still prefers two regions when possible.
  */
-function pickSpotlightsForHome(
+function pickSpotlightsForSession(
   rows: SafetySpotlightRow[],
   count: number,
-): SafetySpotlightRow[] {
-  if (rows.length === 0) return [];
-  const pool = rows.slice(0, Math.min(16, rows.length));
-  const bucket = dayBucketUtc();
-  const start = bucket % pool.length;
-  const first = pool[start]!;
-  if (count <= 1) return [first];
+  shownIds: string[],
+): { picked: SafetySpotlightRow[]; sessionReset: boolean } {
+  if (rows.length === 0) return { picked: [], sessionReset: false };
+  const pool = rows.slice(0, Math.min(POOL_CAP, rows.length));
+  const unseen = pool.filter((r) => !shownIds.includes(r.id));
+  const sessionReset = unseen.length === 0;
+  const candidates = sessionReset ? pool : unseen;
+  const start = Date.now() % candidates.length;
+  const first = candidates[start]!;
+  if (count <= 1) return { picked: [first], sessionReset };
 
-  for (let step = 1; step < pool.length; step++) {
-    const idx = (start + step) % pool.length;
-    const candidate = pool[idx]!;
+  for (let step = 1; step < candidates.length; step++) {
+    const idx = (start + step) % candidates.length;
+    const candidate = candidates[idx]!;
     if (candidate.region_slug !== first.region_slug) {
-      return [first, candidate];
+      return { picked: [first, candidate], sessionReset };
     }
   }
-  return [first, pool[(start + 1) % pool.length]!];
+  return {
+    picked: [first, candidates[(start + 1) % candidates.length]!],
+    sessionReset,
+  };
 }
 
 const FALLBACK_SPOTLIGHTS: SafetySpotlightRow[] = [
@@ -98,7 +107,16 @@ function toHomeSpotlight(row: SafetySpotlightRow): HomeSafetySpotlight {
 
 export async function getHomeSafetySpotlights(
   count = 2,
-): Promise<HomeSafetySpotlight[]> {
+  shownIdsThisSession: string[] = [],
+): Promise<HomeSafetySpotlightsResult> {
+  const mapResult = (
+    picked: SafetySpotlightRow[],
+    sessionReset: boolean,
+  ): HomeSafetySpotlightsResult => ({
+    spotlights: picked.map(toHomeSpotlight),
+    sessionReset,
+  });
+
   try {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
@@ -108,9 +126,12 @@ export async function getHomeSafetySpotlights(
 
     if (error) {
       console.error("[safety_spotlights]", error.message);
-      return pickSpotlightsForHome(FALLBACK_SPOTLIGHTS, count).map(
-        toHomeSpotlight,
+      const { picked, sessionReset } = pickSpotlightsForSession(
+        FALLBACK_SPOTLIGHTS,
+        count,
+        shownIdsThisSession,
       );
+      return mapResult(picked, sessionReset);
     }
 
     const rows = ((data ?? []) as SafetySpotlightRow[]).map((row) => ({
@@ -123,15 +144,26 @@ export async function getHomeSafetySpotlights(
       );
     });
     if (rows.length === 0) {
-      return pickSpotlightsForHome(FALLBACK_SPOTLIGHTS, count).map(
-        toHomeSpotlight,
+      const { picked, sessionReset } = pickSpotlightsForSession(
+        FALLBACK_SPOTLIGHTS,
+        count,
+        shownIdsThisSession,
       );
+      return mapResult(picked, sessionReset);
     }
 
-    return pickSpotlightsForHome(rows, count).map(toHomeSpotlight);
-  } catch {
-    return pickSpotlightsForHome(FALLBACK_SPOTLIGHTS, count).map(
-      toHomeSpotlight,
+    const { picked, sessionReset } = pickSpotlightsForSession(
+      rows,
+      count,
+      shownIdsThisSession,
     );
+    return mapResult(picked, sessionReset);
+  } catch {
+    const { picked, sessionReset } = pickSpotlightsForSession(
+      FALLBACK_SPOTLIGHTS,
+      count,
+      shownIdsThisSession,
+    );
+    return mapResult(picked, sessionReset);
   }
 }

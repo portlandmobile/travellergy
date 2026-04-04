@@ -8,15 +8,6 @@ type Props = {
   regions: FeaturedRegion[];
 };
 
-const cardImagePool = [
-  "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1496417263034-38ec4f0b665a?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=1200&q=80",
-];
-
 export default function FeaturedCityGrid({ regions }: Props) {
   const router = useRouter();
 
@@ -35,7 +26,7 @@ export default function FeaturedCityGrid({ regions }: Props) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {regions.map((region, index) => {
-          const imageUrl = cardImagePool[index % cardImagePool.length]!;
+          const imageUrl = region.heroImageUrl;
           return (
             <motion.button
               key={region.slug}

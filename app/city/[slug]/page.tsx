@@ -3,21 +3,7 @@ import CityHubClient from "@/app/components/city-hub-client";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { getRegionLocations } from "@/lib/region-locations";
-import { getRegionDishes, type RegionDishCard, type RegionDishRiskLevel } from "@/lib/regions-dishes";
-
-function riskBadgeClass(level: RegionDishRiskLevel): string {
-  if (level === "HIGH") return "bg-red-100 text-red-800";
-  if (level === "MEDIUM") return "bg-amber-100 text-amber-800";
-  if (level === "LOW") return "bg-teal-100 text-teal-800";
-  return "bg-gray-100 text-gray-700";
-}
-
-function overallRiskLevel(dishes: RegionDishCard[]): RegionDishRiskLevel {
-  if (dishes.some((dish) => dish.risk_level === "HIGH")) return "HIGH";
-  if (dishes.some((dish) => dish.risk_level === "MEDIUM")) return "MEDIUM";
-  if (dishes.some((dish) => dish.risk_level === "LOW")) return "LOW";
-  return "UNKNOWN";
-}
+import { getRegionDishes } from "@/lib/regions-dishes";
 
 export default async function CityPage({
   params,
@@ -50,8 +36,6 @@ export default async function CityPage({
     );
   }
 
-  const overallRisk = overallRiskLevel(data.dishes);
-
   let locationsData: Awaited<ReturnType<typeof getRegionLocations>> = null;
   try {
     locationsData = await getRegionLocations(slug);
@@ -72,11 +56,6 @@ export default async function CityPage({
           <h2 className="text-2xl font-semibold">{data.region.name}</h2>
           <FreshnessBadge />
         </div>
-        <span
-          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${riskBadgeClass(overallRisk)}`}
-        >
-          Risk: {overallRisk === "UNKNOWN" ? "TBD" : overallRisk}
-        </span>
         <p className="text-sm text-black/70">
           Regional intelligence based on current culinary patterns.
         </p>

@@ -1,137 +1,37 @@
 import { redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { IngestionReviewList, type RowDTO } from "./ingestion-review-list";
+import {
+  buildIngestionReviewUrl,
+  buildPageLinks,
+  parsePage,
+  parsePageSize,
+  parseStatus,
+  rowSummary,
+  STATUS_VALUES,
+  type ReviewListQuery,
+} from "./review-params";
 
-type QueueStatus = "pending" | "needs_review" | "validated" | "rejected";
-
-type IngestionRow = {
-  id: number;
-  source_name: string;
-  status: string;
-  created_at: string | null;
-  processed_at: string | null;
-  raw_data: unknown;
-};
-
-const STATUS_VALUES: QueueStatus[] = [
-  "needs_review",
-  "pending",
-  "validated",
-  "rejected",
-];
-
-function parseStatus(value: string | undefined): QueueStatus {
-  if (value && STATUS_VALUES.includes(value as QueueStatus)) {
-    return value as QueueStatus;
+function describeError(code: string): string {
+  switch (code) {
+    case "no_rows_selected":
+      return "Select at least one row for a bulk action.";
+    case "invalid_row_id":
+      return "Invalid row id.";
+    case "invalid_decision":
+      return "Invalid decision.";
+    case "update_failed":
+      return "Database update failed.";
+    case "audit_failed":
+      return "Audit log insert failed.";
+    default:
+      if (code.startsWith("bulk_partial_failed_")) {
+        const n = code.slice("bulk_partial_failed_".length);
+        return `Bulk action failed for ${n} row(s); others may have succeeded.`;
+      }
+      return code;
   }
-  return "needs_review";
-}
-
-function rowSummary(raw: unknown) {
-  const payload = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-  const mapped =
-    payload && payload.mapped && typeof payload.mapped === "object"
-      ? (payload.mapped as Record<string, unknown>)
-      : null;
-  const transform =
-    payload && payload.transform && typeof payload.transform === "object"
-      ? (payload.transform as Record<string, unknown>)
-      : null;
-
-  const reasons = Array.isArray(transform?.low_confidence_reasons)
-    ? transform?.low_confidence_reasons.filter((v): v is string => typeof v === "string")
-    : [];
-
-  const canonicalSlug =
-    typeof payload?.dish_slug === "string" ? payload.dish_slug : "";
-
-  return {
-    query: typeof payload?.requested_query === "string" ? payload.requested_query : "",
-    nameEn: typeof mapped?.name_en === "string" ? mapped.name_en : "",
-    slug: typeof mapped?.slug === "string" ? mapped.slug : "",
-    canonicalSlug,
-    ingredientCount: Array.isArray(mapped?.ingredients) ? mapped.ingredients.length : 0,
-    confidence: typeof transform?.confidence === "string" ? transform.confidence : "",
-    reasons,
-  };
-}
-
-function reviewListHref(opts: {
-  status: QueueStatus;
-  limit?: string;
-  dish?: string;
-}): string {
-  const u = new URLSearchParams();
-  u.set("status", opts.status);
-  if (opts.limit) u.set("limit", opts.limit);
-  if (opts.dish) u.set("dish", opts.dish);
-  const q = u.toString();
-  return q ? `/admin/ingestion-review?${q}` : "/admin/ingestion-review";
-}
-
-async function decide(formData: FormData) {
-  "use server";
-
-  if (!(await isAdminAuthenticated())) {
-    redirect("/admin/login?next=/admin/ingestion-review");
-  }
-
-  const rowId = Number(formData.get("row_id"));
-  const decision = String(formData.get("decision") ?? "").trim();
-  const reason = String(formData.get("reason") ?? "").trim();
-  const status = parseStatus(String(formData.get("status") ?? ""));
-  const limit = String(formData.get("limit") ?? "").trim();
-  const dish = String(formData.get("dish") ?? "").trim();
-
-  const back = () =>
-    reviewListHref({
-      status,
-      ...(limit ? { limit } : {}),
-      ...(dish ? { dish } : {}),
-    });
-
-  if (!Number.isInteger(rowId) || rowId < 1) {
-    redirect(`${back()}&error=invalid_row_id`);
-  }
-  if (!["accepted", "rejected", "flagged"].includes(decision)) {
-    redirect(`${back()}&error=invalid_decision`);
-  }
-
-  const newStatus =
-    decision === "accepted"
-      ? "validated"
-      : decision === "rejected"
-        ? "rejected"
-        : "needs_review";
-
-  const supabase = getSupabaseServerClient();
-  const { error: updateError } = await supabase
-    .schema("staging")
-    .from("ingestion_raw")
-    .update({
-      status: newStatus,
-      processed_at: new Date().toISOString(),
-    })
-    .eq("id", rowId);
-
-  if (updateError) {
-    redirect(`${back()}&error=update_failed`);
-  }
-
-  const { error: auditError } = await supabase
-    .schema("staging")
-    .from("ingestion_audit")
-    .insert({
-      ingestion_raw_id: rowId,
-      decision,
-      reason: reason.length > 0 ? reason : null,
-    });
-
-  if (auditError) {
-    redirect(`${back()}&error=audit_failed`);
-  }
-
-  redirect(`${back()}&ok=1`);
 }
 
 export default async function IngestionReviewPage({
@@ -139,6 +39,8 @@ export default async function IngestionReviewPage({
 }: {
   searchParams: Promise<{
     status?: string;
+    page?: string;
+    page_size?: string;
     limit?: string;
     dish?: string;
     ok?: string;
@@ -151,45 +53,84 @@ export default async function IngestionReviewPage({
 
   const params = await searchParams;
   const status = parseStatus(params.status);
-  const limitRaw = Number(params.limit ?? "100");
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(Math.floor(limitRaw), 200)) : 100;
+  const pageSize = parsePageSize(params.page_size, params.limit);
   const dishFilter = (params.dish ?? "").trim().toLowerCase();
 
   const supabase = getSupabaseServerClient();
-  let query = supabase
+
+  let countQuery = supabase
+    .schema("staging")
+    .from("ingestion_raw")
+    .select("*", { count: "exact", head: true })
+    .eq("status", status);
+
+  if (dishFilter) {
+    countQuery = countQuery.contains("raw_data", { dish_slug: dishFilter });
+  }
+
+  const { count: totalCountRaw, error: countError } = await countQuery;
+  const totalCount = totalCountRaw ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  let page = parsePage(params.page);
+  if (page > totalPages) page = totalPages;
+
+  const queueQuery: ReviewListQuery = {
+    status,
+    page,
+    pageSize,
+    ...(dishFilter ? { dish: dishFilter } : {}),
+  };
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let dataQuery = supabase
     .schema("staging")
     .from("ingestion_raw")
     .select("id, source_name, status, created_at, processed_at, raw_data")
     .eq("status", status)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(from, to);
 
   if (dishFilter) {
-    query = query.contains("raw_data", { dish_slug: dishFilter });
+    dataQuery = dataQuery.contains("raw_data", { dish_slug: dishFilter });
   }
 
-  const { data, error } = await query;
+  const { data, error } = await dataQuery;
 
-  const rows = (data ?? []) as IngestionRow[];
-  const limitStr = String(limit);
-  const dishStr = dishFilter;
+  type RawRow = {
+    id: number;
+    source_name: string;
+    status: string;
+    created_at: string | null;
+    raw_data: unknown;
+  };
+
+  const rows: RowDTO[] = ((data ?? []) as RawRow[]).map((row) => ({
+    id: row.id,
+    source_name: row.source_name,
+    status: row.status,
+    created_at: row.created_at,
+    summary: rowSummary(row.raw_data),
+  }));
+
+  const nav = buildPageLinks(queueQuery, totalPages);
 
   return (
     <section className="w-full space-y-4">
       <h1 className="text-xl font-semibold text-black">Ingestion Review</h1>
       <p className="text-sm text-black/70">
-        Internal queue for staged ingestion rows. Newest first, capped by{" "}
-        <span className="font-medium text-black">limit</span> (default 100). If a row exists in SQL
-        but not here, raise <span className="font-medium text-black">limit</span> or filter by{" "}
-        <span className="font-medium text-black">dish</span> (canonical{" "}
-        <code className="text-xs">dish_slug</code>).
+        Paginated queue (newest first). Use checkboxes and bulk actions for the current page, or act
+        on one row at a time. Filter by canonical{" "}
+        <code className="text-xs">dish_slug</code> with the <span className="font-medium">dish</span>{" "}
+        query param.
       </p>
 
       <p className="text-xs text-black/60">
         Example:{" "}
         <a
           className="underline"
-          href="/admin/ingestion-review?status=needs_review&dish=rouladen&limit=50"
+          href="/admin/ingestion-review?status=needs_review&dish=rouladen&page_size=25"
         >
           ?status=needs_review&amp;dish=rouladen
         </a>
@@ -199,11 +140,7 @@ export default async function IngestionReviewPage({
         {STATUS_VALUES.map((s) => (
           <a
             key={s}
-            href={reviewListHref({
-              status: s,
-              limit: limitStr,
-              ...(dishStr ? { dish: dishStr } : {}),
-            })}
+            href={buildIngestionReviewUrl({ ...queueQuery, status: s, page: 1 })}
             className={`rounded border px-2 py-1 ${
               s === status ? "border-black bg-black text-white" : "border-black/20 text-black"
             }`}
@@ -220,7 +157,13 @@ export default async function IngestionReviewPage({
       ) : null}
       {params.error ? (
         <p className="rounded border border-red-600/30 bg-red-50 px-3 py-2 text-sm text-red-800">
-          Action failed: {params.error}
+          Action failed: {describeError(params.error)}
+        </p>
+      ) : null}
+
+      {countError ? (
+        <p className="rounded border border-red-600/30 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Failed to count queue: {countError.message}
         </p>
       ) : null}
 
@@ -230,95 +173,28 @@ export default async function IngestionReviewPage({
         </p>
       ) : null}
 
-      {!error ? (
-        <p className="text-xs text-black/55">
-          Showing {rows.length} row{rows.length === 1 ? "" : "s"}
-          {dishStr ? ` (dish_slug=${dishStr})` : ""} · limit={limit}
-        </p>
-      ) : null}
-
-      {!error && rows.length === 0 ? (
+      {!error && !countError && rows.length === 0 ? (
         <p className="rounded border border-black/10 bg-white px-3 py-2 text-sm text-black/70">
           No rows found for status <span className="font-medium text-black">{status}</span>
-          {dishStr ? (
+          {dishFilter ? (
             <>
               {" "}
-              with <span className="font-medium text-black">dish_slug={dishStr}</span>
+              with <span className="font-medium text-black">dish_slug={dishFilter}</span>
             </>
           ) : null}
           .
         </p>
       ) : null}
 
-      <div className="space-y-3">
-        {rows.map((row) => {
-          const summary = rowSummary(row.raw_data);
-          return (
-            <article key={row.id} className="space-y-3 rounded border border-black/10 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-black">
-                    #{row.id} {summary.nameEn ? `- ${summary.nameEn}` : ""}
-                  </p>
-                  <p className="text-xs text-black/60">
-                    source={row.source_name} status={row.status}
-                  </p>
-                </div>
-                <p className="text-xs text-black/60">{row.created_at ?? ""}</p>
-              </div>
-
-              <div className="grid gap-1 text-sm text-black/80">
-                <p>query: {summary.query || "-"}</p>
-                <p>
-                  canonical dish_slug: {summary.canonicalSlug || "-"}{" "}
-                  <span className="text-black/50">· mapped slug: {summary.slug || "-"}</span>
-                </p>
-                <p>ingredients: {summary.ingredientCount}</p>
-                <p>confidence: {summary.confidence || "-"}</p>
-                <p>reasons: {summary.reasons.length > 0 ? summary.reasons.join(", ") : "-"}</p>
-              </div>
-
-              <form action={decide} className="space-y-2">
-                <input type="hidden" name="row_id" value={row.id} />
-                <input type="hidden" name="status" value={status} />
-                <input type="hidden" name="limit" value={limitStr} />
-                {dishStr ? <input type="hidden" name="dish" value={dishStr} /> : null}
-                <input
-                  name="reason"
-                  placeholder="Optional reason"
-                  className="w-full rounded border border-black/20 px-2 py-1 text-sm"
-                />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="submit"
-                    name="decision"
-                    value="accepted"
-                    className="rounded border border-green-700 px-3 py-1 text-sm text-green-800"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="submit"
-                    name="decision"
-                    value="rejected"
-                    className="rounded border border-red-700 px-3 py-1 text-sm text-red-800"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    type="submit"
-                    name="decision"
-                    value="flagged"
-                    className="rounded border border-black/30 px-3 py-1 text-sm text-black"
-                  >
-                    Keep Flagged
-                  </button>
-                </div>
-              </form>
-            </article>
-          );
-        })}
-      </div>
+      {!error && !countError && rows.length > 0 ? (
+        <IngestionReviewList
+          rows={rows}
+          queueQuery={queueQuery}
+          totalCount={totalCount}
+          totalPages={totalPages}
+          nav={nav}
+        />
+      ) : null}
     </section>
   );
 }
