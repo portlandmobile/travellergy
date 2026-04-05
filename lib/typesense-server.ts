@@ -38,3 +38,7 @@ export function getTypesenseClient() {
 export function getRegionsCollectionName(): string {
   return process.env.TYPESENSE_COLLECTION ?? "regions";
 }
+
+export function getEcosystemsCollectionName(): string {
+  return process.env.TYPESENSE_ECOSYSTEMS_COLLECTION ?? "culinary_ecosystems";
+}

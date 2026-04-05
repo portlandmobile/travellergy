@@ -4,6 +4,7 @@ type DishRow = {
   id: string;
   slug: string;
   name_en: string;
+  name_local: string | null;
   description: string | null;
 };
 
@@ -20,7 +21,7 @@ export async function getDishDetails(slug: string) {
 
   const { data: dish, error: dishError } = await supabase
     .from("dishes")
-    .select("id,slug,name_en,description")
+    .select("id,slug,name_en,name_local,description")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -52,6 +53,7 @@ export async function getDishDetails(slug: string) {
     dish: {
       slug: typedDish.slug,
       name_en: typedDish.name_en,
+      name_local: typedDish.name_local ?? typedDish.name_en,
       description: typedDish.description ?? "",
       ingredients,
     },

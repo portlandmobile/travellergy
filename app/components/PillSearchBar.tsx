@@ -3,17 +3,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-
-type RegionSearchResult = {
-  slug: string;
-  name: string;
-  country_code: string;
-};
+import type { DiscoverySearchHit } from "@/lib/discovery-search";
 
 export function PillSearchBar() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<RegionSearchResult[]>([]);
+  const [results, setResults] = useState<DiscoverySearchHit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -38,7 +33,9 @@ export function PillSearchBar() {
           setSearched(true);
           return;
         }
-        const data = (await response.json()) as { results?: RegionSearchResult[] };
+        const data = (await response.json()) as {
+          results?: DiscoverySearchHit[];
+        };
         setResults(data.results ?? []);
         setSearched(true);
       } catch {
@@ -52,6 +49,22 @@ export function PillSearchBar() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  function navigateTo(hit: DiscoverySearchHit) {
+    setQuery("");
+    setResults([]);
+    if (hit.kind === "region") {
+      router.push(`/city/${hit.slug}`);
+      return;
+    }
+    router.push(`/city/${hit.city_slug}/ecosystem/${hit.slug}`);
+  }
+
+  function resultKey(hit: DiscoverySearchHit): string {
+    return hit.kind === "region"
+      ? `r:${hit.slug}`
+      : `e:${hit.city_slug}:${hit.slug}`;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -60,7 +73,7 @@ export function PillSearchBar() {
       className="relative z-10 w-full max-w-md"
     >
       <label htmlFor="pill-region-search" className="sr-only">
-        Search city
+        Search city or culinary hub
       </label>
       <div className="group relative">
         <input
@@ -69,7 +82,7 @@ export function PillSearchBar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
-          placeholder="Try: Tokyo, Bangkok, New York…"
+          placeholder="Try: Tokyo, Bangkok, Edo-mae sushi…"
           className="w-full rounded-full border border-transparent bg-white px-6 py-3 text-charcoal shadow-md outline-none transition-shadow placeholder:text-charcoal/40 focus:border-sage/30 focus:ring-2 focus:ring-travellergy-accent/20 group-hover:shadow-lg"
         />
         {(isLoading || results.length > 0 || (searched && query.trim())) && (
@@ -82,26 +95,28 @@ export function PillSearchBar() {
               results.length === 0 &&
               query.trim() && (
                 <p className="px-4 py-3 text-sm text-charcoal/60">
-                  No cities found. Try another spelling, or search again in a
-                  moment.
+                  No matches. Try another spelling or search again in a moment.
                 </p>
               )}
             {!isLoading && results.length > 0 && (
-              <ul role="listbox" aria-label="City results">
+              <ul role="listbox" aria-label="Search results">
                 {results.map((item) => (
-                  <li key={item.slug} role="option">
+                  <li key={resultKey(item)} role="option" aria-selected={false}>
                     <button
                       type="button"
-                      onClick={() => {
-                        setQuery("");
-                        setResults([]);
-                        router.push(`/city/${item.slug}`);
-                      }}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left text-charcoal transition-colors hover:bg-sage/10"
+                      onClick={() => navigateTo(item)}
+                      className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-charcoal transition-colors hover:bg-sage/10"
                     >
-                      <span className="font-medium">{item.name}</span>
-                      <span className="rounded-full bg-sage/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-sage">
-                        {item.country_code}
+                      <span>
+                        <span className="font-medium">{item.name}</span>
+                        {item.kind === "ecosystem" && item.name_local && (
+                          <span className="mt-0.5 block text-xs text-charcoal/60">
+                            {item.name_local}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-sage/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-sage">
+                        {item.kind === "ecosystem" ? "Hub" : item.country_code}
                       </span>
                     </button>
                   </li>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import CityHubClient from "@/app/components/city-hub-client";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
+import { listEcosystemsForRegionSlug } from "@/lib/culinary-ecosystems";
 import { getRegionLocations } from "@/lib/region-locations";
 import { getRegionDishes } from "@/lib/regions-dishes";
 
@@ -43,6 +44,13 @@ export default async function CityPage({
     locationsData = null;
   }
 
+  let ecosystems: Awaited<ReturnType<typeof listEcosystemsForRegionSlug>> = [];
+  try {
+    ecosystems = await listEcosystemsForRegionSlug(slug);
+  } catch {
+    ecosystems = [];
+  }
+
   return (
     <section className="w-full max-w-6xl space-y-8">
       <Link href="/" className="text-sm underline">
@@ -60,6 +68,33 @@ export default async function CityPage({
           Regional intelligence based on current culinary patterns.
         </p>
       </header>
+
+      {ecosystems.length > 0 && (
+        <section className="space-y-3 rounded-lg border border-sage/20 bg-white p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-charcoal">
+            Culinary safety hubs
+          </h3>
+          <p className="text-sm text-charcoal/65">
+            Deeper context for specific food cultures in this city — risks,
+            patterns, and local-language safety cards.
+          </p>
+          <ul className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {ecosystems.map((e) => (
+              <li key={e.slug}>
+                <Link
+                  href={`/city/${slug}/ecosystem/${e.slug}`}
+                  className="inline-flex items-center gap-2 rounded-full border border-sage/30 bg-sage/5 px-4 py-2 text-sm font-medium text-sage transition hover:border-sage/50 hover:bg-sage/10"
+                >
+                  <span>{e.name_en}</span>
+                  {e.name_local && (
+                    <span className="text-charcoal/70">{e.name_local}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <CityHubClient citySlug={slug} dishes={data.dishes} />
 
