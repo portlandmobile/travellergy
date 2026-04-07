@@ -10,7 +10,10 @@ import {
   SAFETY_SPOTLIGHT_SEEN_COOKIE,
 } from "@/lib/safety-spotlights-session";
 import FeaturedCityGrid from "./featured-city-grid";
-import { getFeaturedRegions } from "@/lib/featured-regions";
+import {
+  getFeaturedRegions,
+  splitFeaturedRegionsForCarousel,
+} from "@/lib/featured-regions";
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -18,10 +21,12 @@ export default async function Home() {
     cookieStore.get(SAFETY_SPOTLIGHT_SEEN_COOKIE)?.value,
   );
 
-  const [featuredRegions, spotlightResult] = await Promise.all([
-    getFeaturedRegions(6),
+  const [featuredRegions12, spotlightResult] = await Promise.all([
+    getFeaturedRegions(12),
     getHomeSafetySpotlights(2, shownIds),
   ]);
+  const [featuredSetA, featuredSetB] =
+    splitFeaturedRegionsForCarousel(featuredRegions12);
   const { spotlights, sessionReset } = spotlightResult;
   const spotlightRecordKey = spotlights
     .map((s) => s.id)
@@ -76,7 +81,7 @@ export default async function Home() {
 
       {/* Hero */}
       <div className="overflow-hidden rounded-3xl border border-sage/20 bg-white shadow-sm">
-        <div className="relative flex h-[420px] w-full flex-col items-center justify-center gap-6 px-6 text-center text-travellergy-text">
+        <div className="relative flex min-h-[280px] w-full flex-col items-center justify-center gap-3 px-6 py-8 text-center text-travellergy-text sm:min-h-[300px] sm:gap-3.5 sm:py-9">
           <p className="text-sm uppercase tracking-[0.24em] text-travellergy-text/60">
             Travellergy
           </p>
@@ -98,7 +103,7 @@ export default async function Home() {
         <FreshnessBadge />
       </div>
       <StalenessWarning />
-      <FeaturedCityGrid regions={featuredRegions} />
+      <FeaturedCityGrid setA={featuredSetA} setB={featuredSetB} />
     </section>
   );
 }

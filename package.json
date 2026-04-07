@@ -9,6 +9,7 @@
     "lint": "next lint",
     "sync:typesense:regions": "node scripts/sync-regions-to-typesense.mjs",
     "ingest:batch": "node --import tsx scripts/ingest-batch.ts",
+    "ingest:ecosystems": "node --import tsx scripts/ingest-ecosystem-file.ts",
     "promote:validated": "node --import tsx scripts/promote-validated.ts"
   },
   "dependencies": {

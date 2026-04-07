@@ -16,6 +16,16 @@ function shuffleInPlace<T>(items: T[]): void {
   }
 }
 
+/** Featured home carousel uses two grids of this many cards each (12 total). */
+export const FEATURED_CAROUSEL_SET_SIZE = 6;
+
+export function splitFeaturedRegionsForCarousel(
+  regions: FeaturedRegion[],
+): [FeaturedRegion[], FeaturedRegion[]] {
+  const n = FEATURED_CAROUSEL_SET_SIZE;
+  return [regions.slice(0, n), regions.slice(n, n * 2)];
+}
+
 /**
  * Loads every region, shuffles, then returns `sampleSize` cities (default 6).
  * Each request reshuffles so a full refresh shows a new set.

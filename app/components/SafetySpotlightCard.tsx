@@ -45,7 +45,7 @@ export function SafetySpotlightCard({
       href={href}
       className="group block w-full overflow-hidden rounded-xl border border-sage/20 bg-white text-left shadow-sm transition-all duration-300 hover:border-sage/35 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sage"
     >
-      <div className="relative aspect-[5/2] w-full overflow-hidden bg-[#ebe4d8]">
+      <div className="relative aspect-[5/1.35] w-full overflow-hidden bg-[#ebe4d8]">
         <Image
           src={imageSrc}
           alt={`${regionLabel}: ${title}`}
@@ -56,7 +56,7 @@ export function SafetySpotlightCard({
           priority={false}
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-charcoal/[0.12] via-transparent to-transparent" />
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-1.5 left-1.5">
           <span
             className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] shadow-sm backdrop-blur-sm ${categoryBadgeClass(category)}`}
           >
@@ -64,7 +64,7 @@ export function SafetySpotlightCard({
           </span>
         </div>
       </div>
-      <div className="space-y-1.5 px-4 pb-4 pt-3">
+      <div className="space-y-1.5 px-4 pb-4 pt-2">
         <h3 className="font-serif text-lg leading-snug text-charcoal group-hover:text-sage">
           {title}
         </h3>

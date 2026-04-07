@@ -83,7 +83,7 @@ export function PillSearchBar() {
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
           placeholder="Try: Tokyo, Bangkok, Edo-mae sushi…"
-          className="w-full rounded-full border border-transparent bg-white px-6 py-3 text-charcoal shadow-md outline-none transition-shadow placeholder:text-charcoal/40 focus:border-sage/30 focus:ring-2 focus:ring-travellergy-accent/20 group-hover:shadow-lg"
+          className="w-full rounded-full border border-transparent bg-white px-5 py-2 text-charcoal shadow-md outline-none transition-shadow placeholder:text-charcoal/40 focus:border-sage/30 focus:ring-2 focus:ring-travellergy-accent/20 group-hover:shadow-lg"
         />
         {(isLoading || results.length > 0 || (searched && query.trim())) && (
           <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-sage/20 bg-white text-left shadow-xl">

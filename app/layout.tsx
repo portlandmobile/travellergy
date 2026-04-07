@@ -41,10 +41,18 @@ export default async function RootLayout({
         <AllergenFilterProvider>
         <div className="flex min-h-full flex-col">
           <header className="border-b border-sage/15 bg-warm/95 backdrop-blur">
-            <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-5">
-              <Link href="/" className="font-serif text-3xl font-semibold text-charcoal">
-                Travellergy
-              </Link>
+            <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
+              <div className="min-w-0 flex-1">
+                <Link
+                  href="/"
+                  className="font-serif text-3xl font-semibold text-charcoal"
+                >
+                  Travellergy
+                </Link>
+                <p className="mt-1 max-w-md text-xs leading-snug text-charcoal/65 sm:text-[13px]">
+                  Curated allergen intelligence for travelers.
+                </p>
+              </div>
               <div className="flex items-center gap-3">
                 <Link
                   href="/compare"
@@ -68,8 +76,8 @@ export default async function RootLayout({
           </main>
           <footer className="border-t border-sage/15 bg-warm/80">
             <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-              <p className="text-xs text-charcoal/55">
-                Curated allergen intelligence for travelers.
+              <p className="text-xs text-charcoal/45">
+                © {new Date().getFullYear()} Travellergy
               </p>
               {!isAdmin ? (
                 <Link
