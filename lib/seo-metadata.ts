@@ -23,6 +23,11 @@ export const rootMetadata: Metadata = {
     "city food guide",
     "dish ingredients",
   ],
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    shortcut: ["/favicon.svg"],
+    apple: [{ url: "/favicon.svg" }],
+  },
   openGraph: {
     type: "website",
     locale: "en_US",

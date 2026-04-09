@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Inter, Playfair_Display } from "next/font/google";
 import { AllergenFilterProvider } from "@/app/contexts/allergen-filter-context";
+import { MixpanelAnalytics } from "@/app/components/mixpanel-analytics";
 import { RootJsonLd } from "@/app/components/root-json-ld";
 import { clearAdminSessionCookie, isAdminAuthenticated } from "@/lib/admin-auth";
 import { brandWordmark } from "@/lib/fonts";
@@ -39,6 +40,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full bg-warm text-charcoal">
         <RootJsonLd />
+        <MixpanelAnalytics />
         <AllergenFilterProvider>
         <div className="flex min-h-full flex-col">
           <header className="relative overflow-hidden border-b border-sage/20">
