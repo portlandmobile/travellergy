@@ -49,24 +49,34 @@ export function cityFoodFlickrTags(cityName: string, slug: string): string {
   return `${parts.join(",")},food`;
 }
 
-export function loremFlickrCityFoodUrl(cityName: string, slug: string): string {
-  const tags = cityFoodFlickrTags(cityName, slug);
-  return `https://loremflickr.com/1200/400/${tags}`;
+/** Stable positive integer per slug so Lorem Flickr returns one image per city (not a random swap on each load). */
+function loremFlickrLockId(slug: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < slug.length; i++) {
+    h ^= slug.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 9_999_991 + 1;
 }
 
-const cachedUnsplashCityFood = unstable_cache(
-  async (slug: string, cityName: string) => {
-    return fetchUnsplashCityFoodUrl(cityName);
-  },
-  ["featured-city-unsplash-food"],
-  { revalidate: 604800 },
-);
+export function loremFlickrCityFoodUrl(cityName: string, slug: string): string {
+  const tags = cityFoodFlickrTags(cityName, slug);
+  const lock = loremFlickrLockId(slug);
+  return `https://loremflickr.com/1200/400/${tags}?lock=${lock}`;
+}
 
 export async function resolveFeaturedCityHeroImage(
   slug: string,
   cityName: string,
 ): Promise<string> {
-  const fromUnsplash = await cachedUnsplashCityFood(slug, cityName);
-  if (fromUnsplash) return fromUnsplash;
+  if (process.env.UNSPLASH_ACCESS_KEY) {
+    // Cache key MUST include `slug`. A single global key made every city reuse the first city's image.
+    const fromUnsplash = await unstable_cache(
+      async () => fetchUnsplashCityFoodUrl(cityName),
+      ["featured-city-unsplash-food", slug],
+      { revalidate: 604800 },
+    )();
+    if (fromUnsplash) return fromUnsplash;
+  }
   return loremFlickrCityFoodUrl(cityName, slug);
 }

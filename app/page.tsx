@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
@@ -14,6 +15,28 @@ import {
   getFeaturedRegions,
   splitFeaturedRegionsForCarousel,
 } from "@/lib/featured-regions";
+import { brandWordmark } from "@/lib/fonts";
+import { absoluteUrl } from "@/lib/site";
+
+const HOME_TITLE = "Allergen intelligence for travelers";
+const HOME_DESCRIPTION =
+  "Discover city-by-city dining patterns, compare destinations, and explore dishes with ingredient and allergen context — curated for people who travel with food allergies.";
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: absoluteUrl("/") },
+  openGraph: {
+    title: `${HOME_TITLE} | Travellergy`,
+    description: HOME_DESCRIPTION,
+    url: absoluteUrl("/"),
+    type: "website",
+  },
+  twitter: {
+    title: `${HOME_TITLE} | Travellergy`,
+    description: HOME_DESCRIPTION,
+  },
+};
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -82,7 +105,9 @@ export default async function Home() {
       {/* Hero */}
       <div className="overflow-hidden rounded-3xl border border-sage/20 bg-white shadow-sm">
         <div className="relative flex min-h-[280px] w-full flex-col items-center justify-center gap-3 px-6 py-8 text-center text-travellergy-text sm:min-h-[300px] sm:gap-3.5 sm:py-9">
-          <p className="text-sm uppercase tracking-[0.24em] text-travellergy-text/60">
+          <p
+            className={`${brandWordmark.className} text-lg font-bold tracking-[-0.04em] text-sage sm:text-xl`}
+          >
             Travellergy
           </p>
           <h1 className="max-w-3xl font-serif text-4xl leading-tight sm:text-5xl">

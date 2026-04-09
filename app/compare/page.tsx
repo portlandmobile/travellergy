@@ -1,8 +1,31 @@
+import type { Metadata } from "next";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { getRegionDishes } from "@/lib/regions-dishes";
 import { parseCompareCitySlugs } from "@/lib/compare-parse";
+import { absoluteUrl } from "@/lib/site";
 import CompareTool, { type CompareColumn } from "./compare-tool";
+
+const COMPARE_TITLE = "Compare cities";
+const COMPARE_DESCRIPTION =
+  "Compare allergen-relevant dish patterns across cities side by side — useful when choosing where to travel with food allergies.";
+
+export const metadata: Metadata = {
+  title: COMPARE_TITLE,
+  description: COMPARE_DESCRIPTION,
+  alternates: { canonical: absoluteUrl("/compare") },
+  openGraph: {
+    title: `${COMPARE_TITLE} | Travellergy`,
+    description: COMPARE_DESCRIPTION,
+    url: absoluteUrl("/compare"),
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${COMPARE_TITLE} | Travellergy`,
+    description: COMPARE_DESCRIPTION,
+  },
+};
 
 export default async function ComparePage({
   searchParams,

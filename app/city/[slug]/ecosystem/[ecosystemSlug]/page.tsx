@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BreadcrumbJsonLd } from "@/app/components/breadcrumb-json-ld";
 import CityHubClient from "@/app/components/city-hub-client";
 import { EcosystemSafetyCardTool } from "@/app/components/ecosystem-safety-card-tool";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { getEcosystemInRegion } from "@/lib/culinary-ecosystems";
 import { getRegionDishes } from "@/lib/regions-dishes";
+import { getRegionMeta } from "@/lib/seo-queries";
+import { absoluteUrl } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string; ecosystemSlug: string }> };
 
@@ -15,18 +18,41 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     regionSlug: slug,
     ecosystemSlug,
   });
-  if (!eco) {
-    return { title: "Hub not found | Travellergy" };
+  let region = null;
+  try {
+    region = await getRegionMeta(slug);
+  } catch {
+    region = null;
   }
-  const title = `${eco.name_en} — ${slug} | Travellergy`;
+  if (!eco) {
+    return {
+      title: "Hub not found",
+      robots: { index: false, follow: true },
+    };
+  }
+  const cityLabel = region?.name ?? slug;
+  const title = `${eco.name_en} — ${cityLabel}`;
   const description =
     eco.seo_description?.trim() ||
     eco.description?.trim() ||
-    `Culinary safety intelligence for ${eco.name_en} in this region.`;
+    `Culinary safety intelligence for ${eco.name_en} in ${cityLabel}.`;
+  const path = `/city/${slug}/ecosystem/${ecosystemSlug}`;
+
   return {
     title,
     description,
-    openGraph: { title, description },
+    alternates: { canonical: absoluteUrl(path) },
+    openGraph: {
+      title: `${title} | Travellergy`,
+      description,
+      url: absoluteUrl(path),
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | Travellergy`,
+      description,
+    },
   };
 }
 
@@ -59,6 +85,16 @@ export default async function EcosystemHubPage({ params }: Props) {
 
   return (
     <section className="w-full max-w-6xl space-y-8">
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", path: "/" },
+          { name: dishData.region.name, path: `/city/${slug}` },
+          {
+            name: eco.name_en,
+            path: `/city/${slug}/ecosystem/${ecosystemSlug}`,
+          },
+        ]}
+      />
       <Link href={`/city/${slug}`} className="text-sm underline">
         &larr; Back to {dishData.region.name}
       </Link>

@@ -1,16 +1,61 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { BreadcrumbJsonLd } from "@/app/components/breadcrumb-json-ld";
 import CityHubClient from "@/app/components/city-hub-client";
 import { FreshnessBadge } from "@/app/components/freshness-badge";
 import { StalenessWarning } from "@/app/components/staleness-warning";
 import { listEcosystemsForRegionSlug } from "@/lib/culinary-ecosystems";
 import { getRegionLocations } from "@/lib/region-locations";
 import { getRegionDishes } from "@/lib/regions-dishes";
+import { getRegionMeta } from "@/lib/seo-queries";
+import { absoluteUrl } from "@/lib/site";
+
+type CityPageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+export async function generateMetadata({
+  params,
+}: CityPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  let region = null;
+  try {
+    region = await getRegionMeta(slug);
+  } catch {
+    return { title: "City" };
+  }
+  if (!region) {
+    return {
+      title: "City not found",
+      robots: { index: false, follow: true },
+    };
+  }
+
+  const title = `${region.name} — Dining & allergen guide`;
+  const description = `Explore dishes and ingredient patterns in ${region.name} (${region.country_code}). Filter by allergen and plan safer meals when you travel.`;
+  const path = `/city/${slug}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: absoluteUrl(path) },
+    openGraph: {
+      title: `${title} | Travellergy`,
+      description,
+      url: absoluteUrl(path),
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | Travellergy`,
+      description,
+    },
+  };
+}
 
 export default async function CityPage({
   params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+}: CityPageProps) {
   const { slug } = await params;
   let data: Awaited<ReturnType<typeof getRegionDishes>> = null;
   try {
@@ -53,6 +98,12 @@ export default async function CityPage({
 
   return (
     <section className="w-full max-w-6xl space-y-8">
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", path: "/" },
+          { name: data.region.name, path: `/city/${slug}` },
+        ]}
+      />
       <Link href="/" className="text-sm underline">
         &larr; Back
       </Link>
@@ -61,7 +112,7 @@ export default async function CityPage({
 
       <header className="space-y-3 rounded-lg border border-black/10 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-2xl font-semibold">{data.region.name}</h2>
+          <h1 className="text-2xl font-semibold">{data.region.name}</h1>
           <FreshnessBadge />
         </div>
         <p className="text-sm text-black/70">
