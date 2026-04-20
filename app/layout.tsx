@@ -46,7 +46,7 @@ export default async function RootLayout({
           <header className="relative overflow-hidden border-b border-sage/20">
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+              className="pointer-events-none absolute inset-0 bg-top bg-repeat-x bg-[length:auto_100%]"
               style={{
                 backgroundImage:
                   "url('/travellergy-header-background.png')",
